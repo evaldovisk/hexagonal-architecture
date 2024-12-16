@@ -1,0 +1,17 @@
+{
+    "request": {
+        "method": "GET",
+        "url": "/addresses/24110566"
+    },
+    "response": {
+        "status": 200,
+        "headers": {
+            "Content-Type": "application/json"
+        },
+        "jsonBody": {
+            "street": "Rua Assalto",
+            "city": "São Gonçalo",
+            "state": "Rio de Janeiro"
+        }
+    }
+}

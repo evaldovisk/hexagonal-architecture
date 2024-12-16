@@ -1,0 +1,93 @@
+version: "3.1"
+
+services:
+  project:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    networks:
+      - broker-kafka
+    ports:
+      - 2181:2181
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    networks:
+      - broker-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - 9096:9096
+      - 9097:9097
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Configuração ajustada para evitar conflito de portas
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9096,PLAINTEXT_HOST://localhost:9097
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9096,PLAINTEXT_HOST://0.0.0.0:9097
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:latest
+    networks:
+      - broker-kafka
+    depends_on:
+      - kafka
+    ports:
+      - 9000:9000
+    environment:
+      # Conecta no listener interno do Kafka
+      KAFKA_BROKERCONNECT: kafka:9096
+
+  mongo:
+    image: mongo
+    restart: always
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8083:8083
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      ME_CONFIG_MONGODB_URL: mongodb://root:example@mongo:27017/
+
+  wiremock:
+    image: wiremock/wiremock:latest
+    ports:
+      - 8082:8080
+    volumes:
+      - ./mappings:/home/wiremock/mappings
+      - ./__files:/home/wiremock/__files
+    environment:
+      JAVA_OPTS: "-Dcom.github.tomakehurst.wiremock.standalone.WireMockServer"
+
+  kafka-init:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - kafka
+    networks:
+      - broker-kafka
+    entrypoint: >
+      sh -c "
+      cub kafka-ready -b kafka:9096 -t 60 &&
+      kafka-topics --create --topic tp-cpf-validated --bootstrap-server kafka:9096 --partitions 1 --replication-factor 1 &&
+      kafka-topics --create --topic tp-cpf-validation --bootstrap-server kafka:9096 --partitions 1 --replication-factor 1"
+
+networks:
+  broker-kafka:
+    driver: bridge
